@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"crypto/md5"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -99,6 +100,71 @@ func mkarchive(outf string, infs []string) (err error) {
 	return cmd.Run()
 }
 
+type progressReader struct {
+	orig        io.Reader
+	read, total int64
+	width       int
+	clearBuf    []byte
+	quit        chan bool
+}
+
+func newProgressReader(r io.Reader, n int64) io.ReadCloser {
+	width := 80
+	rv := &progressReader{
+		orig:     r,
+		total:    n,
+		width:    width,
+		clearBuf: make([]byte, width),
+		quit:     make(chan bool),
+	}
+
+	for i := range rv.clearBuf {
+		rv.clearBuf[i] = ' '
+	}
+	rv.clearBuf[0] = '\r'
+	rv.clearBuf[width-1] = '\r'
+
+	go rv.update()
+	return rv
+}
+
+func (p *progressReader) showPercent() {
+	p.clear()
+	perc := float64(p.read*100) / float64(p.total)
+	fmt.Fprintf(os.Stdout, "%v/%v (%.1f%%)",
+		humanize.Bytes(uint64(p.read)),
+		humanize.Bytes(uint64(p.total)), perc)
+	os.Stdout.Sync()
+}
+
+func (p *progressReader) Close() error {
+	close(p.quit)
+	return nil
+}
+
+func (p *progressReader) clear() {
+	os.Stdout.Write(p.clearBuf)
+}
+
+func (p *progressReader) update() {
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			p.showPercent()
+		case <-p.quit:
+			return
+		}
+	}
+}
+
+func (p *progressReader) Read(b []byte) (int, error) {
+	n, err := p.orig.Read(b)
+	p.read += int64(n)
+	return n, err
+}
+
 func s3upload(c s3.Client, localfile, remotefile string) error {
 	if s3exists(c, remotefile) {
 		return nil
@@ -129,7 +195,10 @@ func s3upload(c s3.Client, localfile, remotefile string) error {
 	log.Printf("Uploading %v (%x) %v", remotefile, h.Sum(nil),
 		humanize.Bytes(uint64(n)))
 
-	return c.PutObject(remotefile, *bucket, h, n, f)
+	pr := newProgressReader(f, n)
+	defer pr.Close()
+
+	return c.PutObject(remotefile, *bucket, h, n, pr)
 }
 
 func doMonth(c s3.Client, month string, files []string) {
