@@ -173,6 +173,24 @@ func doMonth(c s3.Client, month string, files []string) {
 	if err != nil {
 		log.Fatalf("Error uploading %v: %v", month, err)
 	}
+
+	for _, rfn := range files {
+		log.Printf("deleting %v", rfn)
+		var err error
+		for i := 0; i < 3; i++ {
+			err = c.Delete(*bucket, rfn)
+			if err == nil {
+				break
+			} else {
+				log.Printf("Error deleting %v on attempt %v: %v",
+					rfn, i, err)
+			}
+		}
+		if err != nil {
+			log.Fatalf("Permanent deletion error of %v: %v",
+				rfn, err)
+		}
+	}
 }
 
 func process(c s3.Client, sets map[string][]string) {
