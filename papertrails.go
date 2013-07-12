@@ -141,7 +141,6 @@ func doMonth(c s3.Client, month string, files []string) {
 	if err != nil && !os.IsExist(err) {
 		log.Fatalf("Can't create directory %v: %v", month, err)
 	}
-	// defer os.RemoveAll(month)
 	archivefiles := []string{}
 	for _, rfn := range files {
 		bn := filepath.Base(rfn)
@@ -191,6 +190,8 @@ func doMonth(c s3.Client, month string, files []string) {
 				rfn, err)
 		}
 	}
+
+	os.RemoveAll(month)
 }
 
 func process(c s3.Client, sets map[string][]string) {
