@@ -25,6 +25,8 @@ var matchPrefix = flag.String("matchPrefix", "papertrail/logs/dt=",
 var rollupPath = flag.String("rollup", "papertrail/rollup",
 	"Path to hold the rolled up files")
 var maxKeys = flag.Int("maxKeys", 93, "Maximum number of keys to return")
+var progDown = flag.Bool("progressDown", false, "Display progress on downloads")
+var progUp = flag.Bool("progressUp", true, "Display progress on uploads")
 
 func baseDate(s string) string {
 	return filepath.Base(s)[:7]
@@ -62,16 +64,23 @@ func copyFile(c s3.Client, src, dest string) (err error) {
 	}
 	defer df.Close()
 
-	rc, _, err := c.Get(*bucket, src)
+	var rc io.ReadCloser
+
+	rc, l, err := c.Get(*bucket, src)
 	if err != nil {
 		return err
+	}
+	defer rc.Close()
+
+	if *progDown {
+		rc = newProgressReader(rc, l)
+		defer rc.Close()
 	}
 
 	gzr, err := gzip.NewReader(rc)
 	if err != nil {
 		return err
 	}
-	defer rc.Close()
 
 	_, err = io.Copy(df, gzr)
 	return err
