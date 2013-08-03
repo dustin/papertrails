@@ -16,3 +16,5 @@ compressed month archive.
       -rollup="papertrail/rollup": Path to hold the rolled up files
       -secretKey="": S3 secret key
       -startPath="": S3 list start path
+
+[papertrail]: http://papertrailapp.com/
