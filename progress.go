@@ -9,29 +9,33 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
+const width = 80
+
+var clearBuf = make([]byte, width)
+
+func init() {
+	for i := range clearBuf {
+		clearBuf[i] = ' '
+	}
+
+	clearBuf[0] = '\r'
+	clearBuf[width-1] = '\r'
+}
+
 type progressReader struct {
-	orig     io.Reader
-	total    int64
-	width    int
-	clearBuf []byte
-	read     chan int
+	orig  io.Reader
+	total int64
+	width int
+	read  chan int
 }
 
 func newProgressReader(r io.Reader, n int64) io.ReadCloser {
-	width := 80
 	rv := &progressReader{
-		orig:     r,
-		total:    n,
-		width:    width,
-		clearBuf: make([]byte, width),
-		read:     make(chan int),
+		orig:  r,
+		total: n,
+		width: width,
+		read:  make(chan int),
 	}
-
-	for i := range rv.clearBuf {
-		rv.clearBuf[i] = ' '
-	}
-	rv.clearBuf[0] = '\r'
-	rv.clearBuf[width-1] = '\r'
 
 	go rv.update()
 	return rv
@@ -53,7 +57,7 @@ func (p *progressReader) Close() error {
 }
 
 func (p *progressReader) clear() {
-	os.Stdout.Write(p.clearBuf)
+	os.Stdout.Write(clearBuf)
 }
 
 func (p *progressReader) update() {
