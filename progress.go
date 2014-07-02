@@ -23,18 +23,20 @@ func init() {
 }
 
 type progressReader struct {
-	orig  io.Reader
-	total int64
-	width int
-	read  chan int
+	report io.Writer
+	orig   io.Reader
+	total  int64
+	width  int
+	read   chan int
 }
 
 func newProgressReader(r io.Reader, n int64) io.ReadCloser {
 	rv := &progressReader{
-		orig:  r,
-		total: n,
-		width: width,
-		read:  make(chan int),
+		report: os.Stdout,
+		orig:   r,
+		total:  n,
+		width:  width,
+		read:   make(chan int),
 	}
 
 	go rv.update()
@@ -44,10 +46,14 @@ func newProgressReader(r io.Reader, n int64) io.ReadCloser {
 func (p *progressReader) showPercent(read int64) {
 	p.clear()
 	perc := float64(read*100) / float64(p.total)
-	fmt.Fprintf(os.Stdout, "%v/%v (%.1f%%)",
+	fmt.Fprintf(p.report, "%v/%v (%.1f%%)",
 		humanize.Bytes(uint64(read)),
 		humanize.Bytes(uint64(p.total)), perc)
-	os.Stdout.Sync()
+	if s, ok := p.report.(interface {
+		Sync() error
+	}); ok {
+		s.Sync()
+	}
 }
 
 func (p *progressReader) Close() error {
@@ -57,7 +63,7 @@ func (p *progressReader) Close() error {
 }
 
 func (p *progressReader) clear() {
-	os.Stdout.Write(clearBuf)
+	p.report.Write(clearBuf)
 }
 
 func (p *progressReader) update() {
