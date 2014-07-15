@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -11,13 +12,9 @@ import (
 
 const width = 80
 
-var clearBuf = make([]byte, width)
+var clearBuf = bytes.Repeat([]byte{' '}, width)
 
 func init() {
-	for i := range clearBuf {
-		clearBuf[i] = ' '
-	}
-
 	clearBuf[0] = '\r'
 	clearBuf[width-1] = '\r'
 }
