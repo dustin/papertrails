@@ -44,9 +44,9 @@ func s3exists(c s3.Client, fn string) bool {
 	return err == nil
 }
 
-func copyFile(c s3.Client, src, dest string) (err error) {
+func copyFile(c s3.Client, src, dest string) (written int64, err error) {
 	if exists(dest) {
-		return nil
+		return 0, nil
 	}
 
 	tmpfile := dest + ".tmp"
@@ -62,7 +62,7 @@ func copyFile(c s3.Client, src, dest string) (err error) {
 	log.Printf("Downloading %v -> %v", src, dest)
 	df, err := os.OpenFile(tmpfile, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer df.Close()
 
@@ -70,7 +70,7 @@ func copyFile(c s3.Client, src, dest string) (err error) {
 
 	rc, l, err := c.Get(*bucket, src)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer rc.Close()
 
@@ -81,11 +81,10 @@ func copyFile(c s3.Client, src, dest string) (err error) {
 
 	gzr, err := gzip.NewReader(rc)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	_, err = io.Copy(df, gzr)
-	return err
+	return io.Copy(df, gzr)
 }
 
 func mkarchive(outf string, infs []string) (err error) {
@@ -153,14 +152,17 @@ func doMonth(c s3.Client, month string, files []string) {
 		log.Fatalf("Can't create directory %v: %v", month, err)
 	}
 	archivefiles := []string{}
+	written := int64(0)
 	for _, rfn := range files {
 		bn := filepath.Base(rfn)
 		bn = bn[:len(bn)-3]
 		dest := filepath.Join(month, bn)
 		archivefiles = append(archivefiles, dest)
 		for i := 0; i < 3; i++ {
-			err = copyFile(c, rfn, dest)
+			n := int64(0)
+			n, err = copyFile(c, rfn, dest)
 			if err == nil {
+				written += n
 				break
 			} else {
 				log.Printf("Error on %v attempt %v: %v",
@@ -172,7 +174,7 @@ func doMonth(c s3.Client, month string, files []string) {
 		}
 	}
 
-	log.Printf("Making archive")
+	log.Printf("Making archive, %s total", humanize.Bytes(uint64(written)))
 	montha := month + ".7z"
 	err = mkarchive(montha, archivefiles)
 	if err != nil {
