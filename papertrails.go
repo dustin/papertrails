@@ -16,17 +16,19 @@ import (
 	"github.com/dustin/go-humanize"
 )
 
-var accessKey = flag.String("accessKey", "", "S3 access key")
-var secretKey = flag.String("secretKey", "", "S3 secret key")
-var bucket = flag.String("bucket", "", "S3 bucket")
-var startPath = flag.String("startPath", "", "S3 list start path")
-var matchPrefix = flag.String("matchPrefix", "papertrail/logs/dt=",
-	"Prefix for matching files.")
-var rollupPath = flag.String("rollup", "papertrail/rollup",
-	"Path to hold the rolled up files")
-var maxKeys = flag.Int("maxKeys", 93, "Maximum number of keys to return")
-var progDown = flag.Bool("progressDown", false, "Display progress on downloads")
-var progUp = flag.Bool("progressUp", true, "Display progress on uploads")
+var (
+	accessKey   = flag.String("accessKey", "", "S3 access key")
+	secretKey   = flag.String("secretKey", "", "S3 secret key")
+	bucket      = flag.String("bucket", "", "S3 bucket")
+	startPath   = flag.String("startPath", "", "S3 list start path")
+	matchPrefix = flag.String("matchPrefix", "papertrail/logs/dt=",
+		"Prefix for matching files.")
+	rollupPath = flag.String("rollup", "papertrail/rollup",
+		"Path to hold the rolled up files")
+	maxKeys  = flag.Int("maxKeys", 93, "Maximum number of keys to return")
+	progDown = flag.Bool("progressDown", false, "Display progress on downloads")
+	progUp   = flag.Bool("progressUp", true, "Display progress on uploads")
+)
 
 func baseDate(s string) string {
 	return filepath.Base(s)[:7]
