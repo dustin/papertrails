@@ -53,7 +53,8 @@ func (p *progressReader) showPercent(read int64) {
 	}
 }
 
-func (p *progressReader) Close() error {
+func (p *progressReader) Close() (err error) {
+	defer func() { err, _ = recover().(error) }()
 	p.clear()
 	close(p.read)
 	return nil
