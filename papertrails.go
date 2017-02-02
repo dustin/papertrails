@@ -3,6 +3,7 @@ package main
 import (
 	"compress/gzip"
 	"crypto/md5"
+	"encoding/json"
 	"flag"
 	"io"
 	"log"
@@ -19,6 +20,7 @@ import (
 var (
 	accessKey   = flag.String("accessKey", "", "S3 access key")
 	secretKey   = flag.String("secretKey", "", "S3 secret key")
+	configPath  = flag.String("config", "", "Path to config containing S3 credentials")
 	bucket      = flag.String("bucket", "", "S3 bucket")
 	startPath   = flag.String("startPath", "", "S3 list start path")
 	matchPrefix = flag.String("matchPrefix", "papertrail/logs/dt=",
@@ -213,15 +215,31 @@ func process(c s3.Client, sets map[string][]string) {
 	}
 }
 
+func loadAuth() (*s3.Auth, error) {
+	if *configPath == "" {
+		return &s3.Auth{AccessKey: *accessKey, SecretAccessKey: *secretKey}, nil
+	}
+
+	f, err := os.Open(*configPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	rv := &s3.Auth{}
+	err = json.NewDecoder(f).Decode(rv)
+	return rv, err
+}
+
 func main() {
 	flag.Parse()
 
-	c := s3.Client{
-		Auth: &s3.Auth{
-			AccessKey:       *accessKey,
-			SecretAccessKey: *secretKey,
-		},
+	auth, err := loadAuth()
+	if err != nil {
+		log.Fatalf("Error loading auth: %v", err)
 	}
+
+	c := s3.Client{Auth: auth}
 
 	items, err := c.ListBucket(*bucket, *startPath, *maxKeys)
 	if err != nil {
