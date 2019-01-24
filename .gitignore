@@ -1,5 +1,6 @@
 *.7z
 *.tmp
 *~
-/papertrails
+.stack-work/
 2???-??/
+papertrails.cabal
