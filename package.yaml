@@ -33,7 +33,6 @@ dependencies:
 - resourcet
 - optparse-applicative
 - amazonka-s3
-- amazonka-glacier
 
 executables:
   papertrails:
