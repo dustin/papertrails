@@ -32,7 +32,7 @@ dependencies:
 - directory
 - resourcet
 - optparse-applicative
-- amazonka-s3
+- amazonka-s3 >= 1.6.1
 
 executables:
   papertrails:
