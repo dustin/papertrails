@@ -5,12 +5,12 @@ module Main where
 
 import           Control.Lens
 import           Control.Monad                (unless, void)
-import           Control.Monad.IO.Class       (liftIO)
+import           Control.Monad.IO.Class       (MonadIO (..))
 import           Control.Monad.Trans.AWS      (AWST, Credentials (..),
-                                               Region (..), chunkedFile,
-                                               envRegion, newEnv, paginate,
-                                               runAWST, runResourceT, send,
-                                               sinkBody)
+                                               Region (..), ToBody (..),
+                                               envRegion, hashedFile, newEnv,
+                                               paginate, runAWST, runResourceT,
+                                               send, sinkBody)
 import           Control.Monad.Trans.Resource (ResourceT)
 import           Data.Conduit                 (runConduit, (.|))
 import qualified Data.Conduit.Binary          as CB
@@ -46,6 +46,9 @@ options = Options
   <*> strOption (long "input-prefix" <> showDefault <> value "papertrail/logs/" <> help "prefix to input files")
   <*> strOption (long "rollup-prefix" <> showDefault <> value "papertrail/rollup/" <> help "prefix to output files")
 
+exists :: MonadIO m => FilePath -> m Bool
+exists = liftIO . doesFileExist
+
 main' :: Options -> IO ()
 main' Options{..} = do
   before <- formatTime defaultTimeLocale "%Y-%m" <$> getCurrentTime
@@ -74,11 +77,11 @@ main' Options{..} = do
               let zf = (unpack g <> ".7z")
                   k = ObjectKey (outputPrefix <> pack zf)
               liftIO $ sevenz zf (map lfn ls)
-              cf <- chunkedFile 16384 zf
-              void . send $ putObject bucketName k cf
+              hf <- hashedFile zf
+              void . send $ putObject bucketName k (toBody hf)
 
             sevenz :: FilePath -> [FilePath] -> IO ()
-            sevenz fn contents = callProcess "7z" ("a" : fn : contents)
+            sevenz fn contents = exists fn >>= \e -> unless e $ callProcess "7z" ("a" : fn : contents)
 
             cleanupLocal :: (Text, [ObjectKey]) -> AWST (ResourceT IO) ()
             cleanupLocal (gn, _) = liftIO $ removeDirectoryRecursive (unpack gn)
@@ -91,8 +94,8 @@ main' Options{..} = do
             dl :: ObjectKey -> AWST (ResourceT IO) ()
             dl k = do
               let fn = lfn k
-              e <- liftIO $ doesFileExist fn
-              unless e (dl' fn)
+              e <- exists fn
+              unless e $ dl' fn
 
                 where dl' fn =  do
                         liftIO $ putStrLn ( "downloading " <> fn)
