@@ -46,8 +46,8 @@ options = Options
   <*> strOption (long "input-prefix" <> showDefault <> value "papertrail/logs/" <> help "prefix to input files")
   <*> strOption (long "rollup-prefix" <> showDefault <> value "papertrail/rollup/" <> help "prefix to output files")
 
-exists :: MonadIO m => FilePath -> m Bool
-exists = liftIO . doesFileExist
+unlessExists :: MonadIO m => FilePath -> m () -> m ()
+unlessExists fn a = (liftIO . doesFileExist) fn >>= \e -> unless e a
 
 main' :: Options -> IO ()
 main' Options{..} = do
@@ -81,7 +81,7 @@ main' Options{..} = do
               void . send $ putObject bucketName k (toBody hf)
 
             sevenz :: FilePath -> [FilePath] -> IO ()
-            sevenz fn contents = exists fn >>= \e -> unless e $ callProcess "7z" ("a" : fn : contents)
+            sevenz fn contents = unlessExists fn $ callProcess "7z" ("a" : fn : contents)
 
             cleanupLocal :: (Text, [ObjectKey]) -> AWST (ResourceT IO) ()
             cleanupLocal (gn, _) = liftIO $ removeDirectoryRecursive (unpack gn)
@@ -92,10 +92,7 @@ main' Options{..} = do
 
             -- dl downloads files that don't yet exist locally
             dl :: ObjectKey -> AWST (ResourceT IO) ()
-            dl k = do
-              let fn = lfn k
-              e <- exists fn
-              unless e $ dl' fn
+            dl k = let fn = lfn k in unlessExists fn $ dl' fn
 
                 where dl' fn =  do
                         liftIO $ putStrLn ( "downloading " <> fn)
