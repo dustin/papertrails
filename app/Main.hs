@@ -6,31 +6,21 @@ module Main where
 import           Control.Lens
 import           Control.Monad                (unless, void)
 import           Control.Monad.IO.Class       (MonadIO (..))
-import           Control.Monad.Trans.AWS      (AWST, Credentials (..),
-                                               Region (..), ToBody (..),
-                                               envRegion, hashedFile, newEnv,
-                                               paginate, runAWST, runResourceT,
-                                               send, sinkBody)
+import           Control.Monad.Trans.AWS      (AWST, Credentials (..), ToBody (..), envRegion, hashedFile, newEnv,
+                                               paginate, runAWST, runResourceT, send, sinkBody)
 import           Control.Monad.Trans.Resource (ResourceT)
 import           Data.Conduit                 (runConduit, (.|))
 import qualified Data.Conduit.Binary          as CB
 import qualified Data.Conduit.List            as CL
 import           Data.Conduit.Zlib            (ungzip)
 import           Data.List                    (sort)
-import           Data.Semigroup               ((<>))
-import           Data.Text                    (Text, drop, dropEnd, isPrefixOf,
-                                               pack, splitOn, take, unpack)
-import           Data.Time                    (defaultTimeLocale, formatTime,
-                                               getCurrentTime)
+import           Data.Text                    (Text, drop, dropEnd, isPrefixOf, pack, splitOn, take, unpack)
+import           Data.Time                    (defaultTimeLocale, formatTime, getCurrentTime)
 import           Network.AWS.Data             (toText)
 import           Network.AWS.S3
-import           Options.Applicative          (Parser, execParser, fullDesc,
-                                               help, helper, info, long,
-                                               progDesc, showDefault, strOption,
-                                               value, (<**>))
-import           System.Directory             (createDirectoryIfMissing,
-                                               doesFileExist,
-                                               removeDirectoryRecursive,
+import           Options.Applicative          (Parser, execParser, fullDesc, help, helper, info, long, progDesc,
+                                               showDefault, strOption, value, (<**>))
+import           System.Directory             (createDirectoryIfMissing, doesFileExist, removeDirectoryRecursive,
                                                renameFile)
 import           System.Process               (callProcess)
 
