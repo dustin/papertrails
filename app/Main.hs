@@ -37,14 +37,14 @@ options = Options
   <*> strOption (long "rollup-prefix" <> showDefault <> value "papertrail/rollup/" <> help "prefix to output files")
 
 unlessExists :: MonadIO m => FilePath -> m () -> m ()
-unlessExists fn a = (liftIO . doesFileExist) fn >>= \e -> unless e a
+unlessExists fn a = (liftIO . doesFileExist) fn >>= flip unless a
 
 main' :: Options -> IO ()
 main' Options{..} = do
   before <- formatTime defaultTimeLocale "%Y-%m" <$> getCurrentTime
   env <- newEnv Discover <&> set envRegion NorthVirginia
   runResourceT . runAWST env $
-    runConduit $ paginate (listObjectsV2 bucketName & lovPrefix .~ Just inputPrefix)
+    runConduit $ paginate (listObjectsV2 bucketName & lovPrefix ?~ inputPrefix)
       .| CL.concatMap (view lovrsContents)
       .| CL.map       (view oKey)
       .| CL.filter    (\v -> dt (toText v) < pack before) -- Don't include current month
@@ -64,7 +64,7 @@ main' Options{..} = do
 
             sevenup :: (Text, [ObjectKey]) -> AWST (ResourceT IO) ()
             sevenup (g, ls) = do
-              let zf = (unpack g <> ".7z")
+              let zf = unpack g <> ".7z"
                   k = ObjectKey (outputPrefix <> pack zf)
               liftIO $ sevenz zf (map lfn ls)
               hf <- hashedFile zf
@@ -87,7 +87,7 @@ main' Options{..} = do
                 where dl' fn =  do
                         liftIO $ putStrLn ( "downloading " <> fn)
                         liftIO $ createDirectoryIfMissing False $ unpack (ym k)
-                        rs <- send $ (getObject bucketName k)
+                        rs <- send (getObject bucketName k)
                         (rs ^. gorsBody) `sinkBody` (ungzip .| CB.sinkFile (fn <> ".tmp"))
                         liftIO $ renameFile (fn <> ".tmp") fn
 
