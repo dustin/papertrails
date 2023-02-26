@@ -1,23 +1,26 @@
+{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
 module Main where
 
+import           Amazonka                     (Credentials (..), Region (..), hashedFile, newEnv, paginate,
+                                               runResourceT, send, sinkBody, toBody, toText)
+import qualified Amazonka                     as AWS
+import           Amazonka.S3                  (BucketName, ObjectKey (..), newDelete, newDeleteObjects, newGetObject,
+                                               newListObjectsV2, newObjectIdentifier, newPutObject)
 import           Control.Lens
 import           Control.Monad                (unless, void)
 import           Control.Monad.IO.Class       (MonadIO (..))
-import           Control.Monad.Trans.AWS      (AWST, Credentials (..), ToBody (..), envRegion, hashedFile, newEnv,
-                                               paginate, runAWST, runResourceT, send, sinkBody)
 import           Control.Monad.Trans.Resource (ResourceT)
 import           Data.Conduit                 (runConduit, (.|))
 import qualified Data.Conduit.Binary          as CB
 import qualified Data.Conduit.List            as CL
 import           Data.Conduit.Zlib            (ungzip)
+import           Data.Generics.Labels         ()
 import           Data.List                    (sort)
 import           Data.Text                    (Text, drop, dropEnd, isPrefixOf, pack, splitOn, take, unpack)
 import           Data.Time                    (defaultTimeLocale, formatTime, getCurrentTime)
-import           Network.AWS.Data             (toText)
-import           Network.AWS.S3
 import           Options.Applicative          (Parser, execParser, fullDesc, help, helper, info, long, progDesc,
                                                showDefault, strOption, value, (<**>))
 import           System.Directory             (createDirectoryIfMissing, doesFileExist, removeDirectoryRecursive,
@@ -39,14 +42,13 @@ options = Options
 unlessExists :: MonadIO m => FilePath -> m () -> m ()
 unlessExists fn a = (liftIO . doesFileExist) fn >>= flip unless a
 
-main' :: Options -> IO ()
-main' Options{..} = do
+main' :: AWS.Env -> Options -> IO ()
+main' env Options{..} = do
   before <- formatTime defaultTimeLocale "%Y-%m" <$> getCurrentTime
-  env <- newEnv Discover <&> set envRegion NorthVirginia
-  runResourceT . runAWST env $
-    runConduit $ paginate (listObjectsV2 bucketName & lovPrefix ?~ inputPrefix)
-      .| CL.concatMap (view lovrsContents)
-      .| CL.map       (view oKey)
+  runResourceT $
+    runConduit $ paginate env (newListObjectsV2 bucketName & #prefix ?~ inputPrefix)
+      .| CL.concatMap (view (#contents . _Just))
+      .| CL.map       (view #key)
       .| CL.filter    (\v -> dt (toText v) < pack before) -- Don't include current month
       .| CL.iterM     dl                                  -- Locally cache all the files
       .| CL.groupBy   (\x y -> ym x == ym y)              -- Group them by month
@@ -62,37 +64,39 @@ main' Options{..} = do
             lfn :: ObjectKey -> FilePath
             lfn k = unpack (ym k) <> "/" <> (unpack . dropEnd 3 . last . splitOn "/" . toText $ k)
 
-            sevenup :: (Text, [ObjectKey]) -> AWST (ResourceT IO) ()
+            sevenup :: (Text, [ObjectKey]) -> ResourceT IO ()
             sevenup (g, ls) = do
               let zf = unpack g <> ".7z"
                   k = ObjectKey (outputPrefix <> pack zf)
               liftIO $ sevenz zf (map lfn ls)
               hf <- hashedFile zf
-              void . send $ putObject bucketName k (toBody hf)
+              void . send env $ newPutObject bucketName k (toBody hf)
 
             sevenz :: FilePath -> [FilePath] -> IO ()
             sevenz fn contents = unlessExists fn $ callProcess "7z" ("a" : fn : contents)
 
-            cleanupLocal :: (Text, [ObjectKey]) -> AWST (ResourceT IO) ()
+            cleanupLocal :: (Text, [ObjectKey]) -> ResourceT IO ()
             cleanupLocal (gn, _) = liftIO $ removeDirectoryRecursive (unpack gn)
 
-            cleanupRemote :: (Text, [ObjectKey]) -> AWST (ResourceT IO) ()
+            cleanupRemote :: (Text, [ObjectKey]) -> ResourceT IO ()
             cleanupRemote (_, obs) =
-              void . send $ deleteObjects bucketName (delete' & dObjects .~ map objectIdentifier obs)
+              void . send env $ newDeleteObjects bucketName (newDelete & #objects .~ map newObjectIdentifier obs)
 
             -- dl downloads files that don't yet exist locally
-            dl :: ObjectKey -> AWST (ResourceT IO) ()
+            dl :: ObjectKey -> ResourceT IO ()
             dl k = let fn = lfn k in unlessExists fn $ dl' fn
 
                 where dl' fn =  do
                         liftIO $ putStrLn ( "downloading " <> fn)
                         liftIO $ createDirectoryIfMissing False $ unpack (ym k)
-                        rs <- send (getObject bucketName k)
-                        (rs ^. gorsBody) `sinkBody` (ungzip .| CB.sinkFile (fn <> ".tmp"))
+                        rs <- send env (newGetObject bucketName k)
+                        (rs ^. #body) `sinkBody` (ungzip .| CB.sinkFile (fn <> ".tmp"))
                         liftIO $ renameFile (fn <> ".tmp") fn
 
 main :: IO ()
-main = main' =<< execParser opts
+main = do
+    env <- newEnv Discover <&> set #_envRegion NorthVirginia
+    main' env =<< execParser opts
 
   where opts = info (options <**> helper)
           ( fullDesc <> progDesc "Process papertrail logs.")
