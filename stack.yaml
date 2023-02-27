@@ -10,7 +10,7 @@ extra-deps:
   - lib/services/amazonka-s3
   - lib/services/amazonka-sts
 
-resolver: lts-19.21
+resolver: lts-19.33
 
 
 nix:
