@@ -4,9 +4,11 @@
 
 module Main where
 
-import           Amazonka                     (Credentials (..), Region (..), hashedFile, newEnv, paginate,
-                                               runResourceT, send, sinkBody, toBody, toText)
+import           Amazonka                     (Region (..), hashedFile, newEnv, paginate, runResourceT, send, sinkBody,
+                                               toBody)
 import qualified Amazonka                     as AWS
+import           Amazonka.Auth                (discover)
+import           Amazonka.Data.Text           (toText)
 import           Amazonka.S3                  (BucketName, ObjectKey (..), newDelete, newDeleteObjects, newGetObject,
                                                newListObjectsV2, newObjectIdentifier, newPutObject)
 import           Control.Lens
@@ -95,7 +97,7 @@ main' env Options{..} = do
 
 main :: IO ()
 main = do
-    env <- newEnv Discover <&> set #_envRegion NorthVirginia
+    env <- newEnv discover <&> set #region NorthVirginia
     main' env =<< execParser opts
 
   where opts = info (options <**> helper)

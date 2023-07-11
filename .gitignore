@@ -1,6 +1,8 @@
 *.7z
 *.tmp
 *~
+.DS_Store
+.direnv
 .stack-work/
 2???-??/
 papertrails.cabal
